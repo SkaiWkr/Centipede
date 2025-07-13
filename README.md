@@ -52,9 +52,9 @@ git clone https://github.com/SkaiWkr/Centipede.git
 cd Centipede
 ```
 
-2. Open `main.html` in your browser:
+2. Open `cent.html` in your browser:
 ```bash
-open main.html
+open cent.html
 ```
 
 That's it! No build process or dependencies required.
