@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centipede Follower</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            height: 100vh;
+            overflow: hidden;
+            cursor: crosshair;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        .centipede-segment {
+            position: absolute;
+            border-radius: 50%;
+            transition: all 0.1s ease-out;
+            box-shadow: 0 0 20px rgba(255, 100, 100, 0.3);
+            z-index: 10;
+        }
+        
+        .centipede-head {
+            background: radial-gradient(circle at 30% 30%, #ff6b6b, #d63031);
+            border: 2px solid #ff3838;
+            animation: pulse 2s infinite;
+        }
+        
+        .centipede-body {
+            background: radial-gradient(circle at 30% 30%, #4ecdc4, #00b894);
+            border: 1px solid #00cec9;
+        }
+        
+        .centipede-tail {
+            background: radial-gradient(circle at 30% 30%, #fdcb6e, #e17055);
+            border: 1px solid #f39c12;
+        }
+        
+        .centipede-leg {
+            position: absolute;
+            background: linear-gradient(45deg, #2d3436, #636e72);
+            border-radius: 2px;
+            transform-origin: center;
+            animation: wiggle 0.5s infinite alternate;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { 
+                transform: scale(1);
+                box-shadow: 0 0 20px rgba(255, 107, 107, 0.6);
+            }
+            50% { 
+                transform: scale(1.1);
+                box-shadow: 0 0 30px rgba(255, 107, 107, 0.8);
+            }
+        }
+        
+        @keyframes wiggle {
+            0% { transform: rotate(-15deg); }
+            100% { transform: rotate(15deg); }
+        }
+        
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: #fff;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: sparkle 1s ease-out forwards;
+        }
+        
+        @keyframes sparkle {
+            0% {
+                opacity: 1;
+                transform: scale(0);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0);
+            }
+        }
+        
+        .message {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 18px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            border-radius: 10px;
+            border: 1px solid #4ecdc4;
+            box-shadow: 0 0 20px rgba(78, 205, 196, 0.3);
+            z-index: 100;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+        }
+        
+        .message.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .other-centipede {
+            filter: hue-rotate(180deg) brightness(0.9);
+            opacity: 0.8;
+        }
+        
+        .other-centipede.centipede-head {
+            animation: pulse 2s infinite, otherGlow 3s infinite;
+        }
+        
+        @keyframes otherGlow {
+            0%, 100% { 
+                box-shadow: 0 0 20px rgba(107, 255, 107, 0.6);
+            }
+            50% { 
+                box-shadow: 0 0 30px rgba(107, 255, 107, 0.8);
+            }
+        }
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            color: #fff;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: 1px solid #74b9ff;
+            z-index: 100;
+        }
+        
+        .eyes {
+            position: absolute;
+            top: 20%;
+            left: 15%;
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 12px 0 0 #fff;
+            animation: blink 3s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 90%, 100% { opacity: 1; }
+            95% { opacity: 0; }
+        }
+        
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: #fff;
+            border-radius: 50%;
+            animation: twinkle 2s infinite;
+        }
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="stars" id="stars"></div>
+    <div class="message" id="message"></div>
+    <div class="connection-status" id="connectionStatus">Searching for other centipedes...</div>
+    
+    <script>
+        class CentipedeFollower {
+            constructor() {
+                this.segments = [];
+                this.segmentCount = 20;
+                this.mouseX = window.innerWidth / 2;
+                this.mouseY = window.innerHeight / 2;
+                this.targetX = this.mouseX;
+                this.targetY = this.mouseY;
+                this.isConnected = false;
+                this.otherCentipedes = new Map();
+                this.myId = 'centipede_' + Math.random().toString(36).substr(2, 9);
+                this.greetingState = 'idle'; // idle, approaching, greeting, greeted
+                this.lastGreetingTime = 0;
+                
+                this.createCentipede();
+                this.setupEventListeners();
+                this.startAnimation();
+                this.createStars();
+                this.setupCommunication();
+            }
+            
+            createCentipede() {
+                for (let i = 0; i < this.segmentCount; i++) {
+                    const segment = document.createElement('div');
+                    segment.className = 'centipede-segment';
+                    
+                    let size, className;
+                    if (i === 0) {
+                        size = 25;
+                        className = 'centipede-head';
+                        // Add eyes to the head
+                        const eyes = document.createElement('div');
+                        eyes.className = 'eyes';
+                        segment.appendChild(eyes);
+                    } else if (i === this.segmentCount - 1) {
+                        size = 12;
+                        className = 'centipede-tail';
+                    } else {
+                        size = 18 - (i * 0.3);
+                        className = 'centipede-body';
+                    }
+                    
+                    segment.classList.add(className);
+                    segment.style.width = size + 'px';
+                    segment.style.height = size + 'px';
+                    
+                    // Add legs to body segments
+                    if (i > 0 && i < this.segmentCount - 1) {
+                        this.addLegs(segment, size);
+                    }
+                    
+                    document.body.appendChild(segment);
+                    
+                    this.segments.push({
+                        element: segment,
+                        x: this.mouseX,
+                        y: this.mouseY,
+                        targetX: this.mouseX,
+                        targetY: this.mouseY,
+                        size: size
+                    });
+                }
+            }
+            
+            addLegs(segment, size) {
+                for (let i = 0; i < 4; i++) {
+                    const leg = document.createElement('div');
+                    leg.className = 'centipede-leg';
+                    leg.style.width = '2px';
+                    leg.style.height = (size * 0.8) + 'px';
+                    leg.style.left = (i % 2 === 0 ? -size * 0.4 : size * 0.4) + 'px';
+                    leg.style.top = (i < 2 ? size * 0.2 : size * 0.6) + 'px';
+                    leg.style.animationDelay = (i * 0.1) + 's';
+                    segment.appendChild(leg);
+                }
+            }
+            
+            setupEventListeners() {
+                document.addEventListener('mousemove', (e) => {
+                    this.targetX = e.clientX;
+                    this.targetY = e.clientY;
+                });
+                
+                document.addEventListener('click', () => {
+                    this.createSparkles();
+                });
+            }
+            
+            createSparkles() {
+                for (let i = 0; i < 10; i++) {
+                    setTimeout(() => {
+                        const particle = document.createElement('div');
+                        particle.className = 'particle';
+                        particle.style.left = this.segments[0].x + 'px';
+                        particle.style.top = this.segments[0].y + 'px';
+                        particle.style.background = `hsl(${Math.random() * 360}, 70%, 60%)`;
+                        document.body.appendChild(particle);
+                        
+                        setTimeout(() => {
+                            particle.remove();
+                        }, 1000);
+                    }, i * 50);
+                }
+            }
+            
+            createStars() {
+                const starsContainer = document.getElementById('stars');
+                for (let i = 0; i < 50; i++) {
+                    const star = document.createElement('div');
+                    star.className = 'star';
+                    star.style.left = Math.random() * 100 + '%';
+                    star.style.top = Math.random() * 100 + '%';
+                    star.style.animationDelay = Math.random() * 2 + 's';
+                    starsContainer.appendChild(star);
+                }
+            }
+            
+            setupCommunication() {
+                // Use BroadcastChannel for cross-tab communication
+                this.channel = new BroadcastChannel('centipede-channel');
+                
+                this.channel.onmessage = (event) => {
+                    const { type, data } = event.data;
+                    
+                    switch (type) {
+                        case 'hello':
+                            this.handleHello(data);
+                            break;
+                        case 'position':
+                            this.updateOtherCentipede(data);
+                            break;
+                        case 'greeting':
+                            this.handleGreeting(data);
+                            break;
+                        case 'goodbye':
+                            this.handleGoodbye(data);
+                            break;
+                    }
+                };
+                
+                // Announce presence
+                this.channel.postMessage({
+                    type: 'hello',
+                    data: {
+                        id: this.myId,
+                        timestamp: Date.now()
+                    }
+                });
+                
+                // Send position updates
+                setInterval(() => {
+                    this.channel.postMessage({
+                        type: 'position',
+                        data: {
+                            id: this.myId,
+                            x: this.segments[0].x,
+                            y: this.segments[0].y,
+                            segments: this.segments.map(s => ({ x: s.x, y: s.y, size: s.size }))
+                        }
+                    });
+                }, 50);
+                
+                // Handle page unload
+                window.addEventListener('beforeunload', () => {
+                    this.channel.postMessage({
+                        type: 'goodbye',
+                        data: { id: this.myId }
+                    });
+                });
+            }
+            
+            handleHello(data) {
+                if (data.id !== this.myId) {
+                    this.isConnected = true;
+                    this.updateConnectionStatus('Connected to other centipede!');
+                    
+                    // Create visual representation of other centipede
+                    this.createOtherCentipede(data.id);
+                }
+            }
+            
+            createOtherCentipede(id) {
+                const otherCentipede = {
+                    id: id,
+                    segments: [],
+                    lastUpdate: Date.now()
+                };
+                
+                // Create visual segments for other centipede
+                for (let i = 0; i < this.segmentCount; i++) {
+                    const segment = document.createElement('div');
+                    segment.className = 'centipede-segment other-centipede';
+                    
+                    let size, className;
+                    if (i === 0) {
+                        size = 25;
+                        className = 'centipede-head';
+                        const eyes = document.createElement('div');
+                        eyes.className = 'eyes';
+                        segment.appendChild(eyes);
+                    } else if (i === this.segmentCount - 1) {
+                        size = 12;
+                        className = 'centipede-tail';
+                    } else {
+                        size = 18 - (i * 0.3);
+                        className = 'centipede-body';
+                    }
+                    
+                    segment.classList.add(className);
+                    segment.style.width = size + 'px';
+                    segment.style.height = size + 'px';
+                    segment.style.opacity = '0.8';
+                    segment.style.filter = 'hue-rotate(180deg)'; // Different color scheme
+                    
+                    if (i > 0 && i < this.segmentCount - 1) {
+                        this.addLegs(segment, size);
+                    }
+                    
+                    document.body.appendChild(segment);
+                    
+                    otherCentipede.segments.push({
+                        element: segment,
+                        x: window.innerWidth / 2,
+                        y: window.innerHeight / 2,
+                        size: size
+                    });
+                }
+                
+                this.otherCentipedes.set(id, otherCentipede);
+            }
+            
+            handleGreeting(data) {
+                if (data.id !== this.myId) {
+                    // Other centipede is greeting us, respond with our own greeting
+                    if (this.greetingState === 'idle') {
+                        this.greetingState = 'greeting';
+                        this.performGreeting(data.id);
+                    }
+                }
+            }
+            
+            performGreeting(otherId) {
+                const otherCentipede = this.otherCentipedes.get(otherId);
+                if (!otherCentipede) return;
+                
+                // Create greeting animation - both centipedes circle around each other
+                this.channel.postMessage({
+                    type: 'greeting',
+                    data: {
+                        id: this.myId,
+                        timestamp: Date.now()
+                    }
+                });
+                
+                // Animate greeting behavior
+                let greetingTime = 0;
+                const greetingDuration = 3000; // 3 seconds
+                
+                const greetingAnimation = () => {
+                    greetingTime += 50;
+                    
+                    if (greetingTime < greetingDuration) {
+                        // Circle around each other
+                        const progress = greetingTime / greetingDuration;
+                        const angle = progress * Math.PI * 2;
+                        const radius = 100;
+                        
+                        const centerX = (this.segments[0].x + otherCentipede.segments[0].x) / 2;
+                        const centerY = (this.segments[0].y + otherCentipede.segments[0].y) / 2;
+                        
+                        this.targetX = centerX + Math.cos(angle) * radius;
+                        this.targetY = centerY + Math.sin(angle) * radius;
+                        
+                        setTimeout(greetingAnimation, 50);
+                    } else {
+                        this.greetingState = 'greeted';
+                        this.lastGreetingTime = Date.now();
+                    }
+                };
+                
+                greetingAnimation();
+            }
+            
+            updateOtherCentipede(data) {
+                if (data.id !== this.myId) {
+                    let otherCentipede = this.otherCentipedes.get(data.id);
+                    
+                    // Create other centipede if it doesn't exist
+                    if (!otherCentipede) {
+                        this.createOtherCentipede(data.id);
+                        otherCentipede = this.otherCentipedes.get(data.id);
+                    }
+                    
+                    // Update positions
+                    if (data.segments && otherCentipede) {
+                        data.segments.forEach((segData, index) => {
+                            if (otherCentipede.segments[index]) {
+                                otherCentipede.segments[index].x = segData.x;
+                                otherCentipede.segments[index].y = segData.y;
+                            }
+                        });
+                        
+                        otherCentipede.lastUpdate = Date.now();
+                        this.checkForGreeting(data.id, otherCentipede);
+                    }
+                }
+            }
+            
+            checkForGreeting(otherId, otherCentipede) {
+                // Check if centipedes are close enough to greet
+                const distance = Math.sqrt(
+                    Math.pow(this.segments[0].x - otherCentipede.segments[0].x, 2) +
+                    Math.pow(this.segments[0].y - otherCentipede.segments[0].y, 2)
+                );
+                
+                // If close enough and haven't greeted recently
+                if (distance < 150 && this.greetingState === 'idle' && 
+                    Date.now() - this.lastGreetingTime > 10000) {
+                    this.greetingState = 'approaching';
+                    this.performGreeting(otherId);
+                }
+            }
+            
+            handleGoodbye(data) {
+                if (data.id !== this.myId) {
+                    const otherCentipede = this.otherCentipedes.get(data.id);
+                    if (otherCentipede) {
+                        // Remove visual elements
+                        otherCentipede.segments.forEach(segment => {
+                            segment.element.remove();
+                        });
+                        this.otherCentipedes.delete(data.id);
+                    }
+                    
+                    if (this.otherCentipedes.size === 0) {
+                        this.isConnected = false;
+                        this.updateConnectionStatus('Searching for other centipedes...');
+                    }
+                }
+            }
+            
+            showMessage(text) {
+                const messageEl = document.getElementById('message');
+                messageEl.textContent = text;
+                messageEl.classList.add('show');
+                
+                setTimeout(() => {
+                    messageEl.classList.remove('show');
+                }, 3000);
+            }
+            
+            updateConnectionStatus(status) {
+                const statusEl = document.getElementById('connectionStatus');
+                statusEl.textContent = status;
+                statusEl.style.borderColor = this.isConnected ? '#00b894' : '#74b9ff';
+            }
+            
+            updatePosition() {
+                // Smooth mouse following with distance constraint
+                const followDistance = 40; // About 1cm distance on most screens
+                
+                this.mouseX += (this.targetX - this.mouseX) * 0.1;
+                this.mouseY += (this.targetY - this.mouseY) * 0.1;
+                
+                // Calculate distance from head to mouse
+                const dx = this.mouseX - this.segments[0].x;
+                const dy = this.mouseY - this.segments[0].y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Only move if we're further than the follow distance
+                if (distance > followDistance) {
+                    const angle = Math.atan2(dy, dx);
+                    const targetX = this.mouseX - Math.cos(angle) * followDistance;
+                    const targetY = this.mouseY - Math.sin(angle) * followDistance;
+                    
+                    // Update head position smoothly towards target
+                    this.segments[0].x += (targetX - this.segments[0].x) * 0.15;
+                    this.segments[0].y += (targetY - this.segments[0].y) * 0.15;
+                } else {
+                    // If we're close enough, just add slight organic movement
+                    this.segments[0].x += Math.sin(Date.now() * 0.002) * 0.3;
+                    this.segments[0].y += Math.cos(Date.now() * 0.002) * 0.3;
+                }
+                
+                // Update body segments to follow
+                for (let i = 1; i < this.segments.length; i++) {
+                    const segment = this.segments[i];
+                    const prevSegment = this.segments[i - 1];
+                    
+                    const dx = prevSegment.x - segment.x;
+                    const dy = prevSegment.y - segment.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance > 25) {
+                        const angle = Math.atan2(dy, dx);
+                        segment.x = prevSegment.x - Math.cos(angle) * 25;
+                        segment.y = prevSegment.y - Math.sin(angle) * 25;
+                    }
+                    
+                    // Add some organic movement
+                    segment.x += Math.sin(Date.now() * 0.001 + i * 0.5) * 0.5;
+                    segment.y += Math.cos(Date.now() * 0.001 + i * 0.5) * 0.3;
+                }
+            }
+            
+            render() {
+                // Render main centipede
+                this.segments.forEach((segment, index) => {
+                    segment.element.style.left = (segment.x - segment.size / 2) + 'px';
+                    segment.element.style.top = (segment.y - segment.size / 2) + 'px';
+                    
+                    // Add rotation for more natural movement
+                    if (index > 0) {
+                        const prevSegment = this.segments[index - 1];
+                        const angle = Math.atan2(
+                            segment.y - prevSegment.y,
+                            segment.x - prevSegment.x
+                        );
+                        segment.element.style.transform = `rotate(${angle}rad)`;
+                    }
+                });
+                
+                // Render other centipedes
+                this.otherCentipedes.forEach((otherCentipede) => {
+                    otherCentipede.segments.forEach((segment, index) => {
+                        segment.element.style.left = (segment.x - segment.size / 2) + 'px';
+                        segment.element.style.top = (segment.y - segment.size / 2) + 'px';
+                        
+                        if (index > 0) {
+                            const prevSegment = otherCentipede.segments[index - 1];
+                            const angle = Math.atan2(
+                                segment.y - prevSegment.y,
+                                segment.x - prevSegment.x
+                            );
+                            segment.element.style.transform = `rotate(${angle}rad)`;
+                        }
+                    });
+                });
+            }
+            
+            startAnimation() {
+                const animate = () => {
+                    this.updatePosition();
+                    this.render();
+                    requestAnimationFrame(animate);
+                };
+                animate();
+            }
+        }
+        
+        // Initialize the centipede when the page loads
+        window.addEventListener('load', () => {
+            new CentipedeFollower();
+        });
+    </script>
+</body>
+</html>
