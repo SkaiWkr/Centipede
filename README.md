@@ -48,13 +48,13 @@ Open `index.html` in your browser and watch the magic happen! For the full exper
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/centipede-follower.git
-cd centipede-follower
+git clone https://github.com/SkaiWkr/Centipede.git
+cd Centipede
 ```
 
-2. Open `index.html` in your browser:
+2. Open `main.html` in your browser:
 ```bash
-open index.html
+open main.html
 ```
 
 That's it! No build process or dependencies required.
@@ -62,9 +62,9 @@ That's it! No build process or dependencies required.
 ## 🎮 How to Use
 
 - **Move your mouse** - The centipede will follow at a comfortable distance
-- **Click anywhere** - Create colorful sparkle effects
+- **Click anywhere** - Create colorful sparkle effects [in process]
 - **Open multiple tabs** - Watch centipedes interact with each other
-- **Bring them close** - Automatic greeting dance when they meet
+- **Bring them close** - Automatic greeting dance when they meet [in process]
 
 ## 🌐 Browser Support
 
